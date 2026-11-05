@@ -1,4 +1,4 @@
-# 多模型协作台（浏览器版）· Beta V1.0.0 Explorer
+# 多模型协作台（浏览器版）· Beta V1.1.0 Explorer
 
 在线使用：打开本仓库的 GitHub Pages 网址即可。
 
