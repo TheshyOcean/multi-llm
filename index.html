@@ -535,6 +535,42 @@ dialog[open]::backdrop{animation:fadeIn .38s var(--ease)}
 .g-sum.done .seal{background:#fbf7f0;color:var(--accent);border-color:#fbf7f0}
 .g-wait{position:absolute;left:0;right:0;text-align:center;font:400 12.5px var(--serif);letter-spacing:.12em;color:var(--muted);animation:fadeIn .6s var(--ease) both}
 
+/* ── 模型阵容编辑器 ── */
+.rrow{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;background:var(--panel);transition:border-color .3s}
+.rrow+.rrow{margin-top:8px}
+.rrow:focus-within{border-color:var(--line-2)}
+.rrow.new{animation:rise .4s var(--ease-out)}
+.rrow-a{display:grid;grid-template-columns:auto 118px 170px 1fr auto;gap:8px;align-items:center}
+.rrow input:not([type=checkbox]),.rrow select,.rrow textarea{padding:6px 9px;border:1px solid var(--line-2);border-radius:8px;background:var(--panel);color:var(--text);font:12.5px var(--sans);min-width:0;width:100%}
+.rrow input:focus,.rrow select:focus,.rrow textarea:focus{outline:none;border-color:var(--ink)}
+.r-name{font-family:var(--mono)!important}
+.r-mod{font-family:var(--mono)!important}
+.r-model{display:flex;gap:6px;min-width:0}
+.r-model .btn-sm{flex:none;white-space:nowrap}
+#settings{width:min(880px,calc(100vw - 32px))}
+.r-en{display:grid;place-items:center;cursor:pointer}
+.r-del{border:0;background:none;color:var(--faint);width:26px;height:26px;border-radius:50%;font-size:13px;transition:background .2s,color .2s}
+.r-del:hover{background:var(--bad-weak);color:var(--bad)}
+.r-adv summary{cursor:pointer;font-size:12px;color:var(--muted);list-style:none}
+.r-adv summary::before{content:"▸ "}
+.r-adv[open] summary::before{content:"▾ "}
+.r-price{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;margin-top:8px}
+.r-price label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--muted);width:92px}
+.r-price span{font-size:11.5px;color:var(--faint);padding-bottom:7px}
+.r-params{display:flex;flex-direction:column;gap:4px;margin-top:8px;font-size:11.5px;color:var(--muted)}
+.r-params textarea{font:12px var(--mono)!important;resize:vertical}
+.r-msg{font-size:12px;color:var(--muted);line-height:1.5}
+.r-msg:empty{display:none}
+.r-msg.ok{color:var(--ok)} .r-msg.bad{color:var(--bad)}
+.add-model{margin-top:10px;width:100%;padding:9px;border:1px dashed var(--line-2);border-radius:12px;background:none;color:var(--muted);font-size:13px;letter-spacing:.06em;transition:border-color .25s,color .25s,background .25s}
+.add-model:hover{border-color:var(--ink);color:var(--text);background:var(--panel)}
+@media (max-width:620px){
+  .rrow-a{grid-template-columns:auto 1fr auto}
+  .rrow-a .r-prov,.rrow-a .r-model{grid-column:1/-1}
+  .rrow-a .r-del{grid-column:3;grid-row:1}                  /* 删除按钮留在名称同一行的右边 */
+  .set-b h3{flex-wrap:wrap;row-gap:2px}
+}
+
 /* ── 动画 ── */
 @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes fadeDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
@@ -573,7 +609,7 @@ dialog[open]::backdrop{animation:fadeIn .38s var(--ease)}
   <div class="brand">
     <span class="brand-mark" aria-hidden="true"><b>协</b></span>
     <h1>多模型协作台</h1>
-    <span class="ver" id="verBadge" title="当前版本">Beta V1.1.0 Explorer</span>
+    <span class="ver" id="verBadge" title="当前版本">Beta V1.2.0 Explorer</span>
     <span class="backend" id="backendBadge" hidden></span>
     <small>指挥官拆解 · 按特长分工 · 交叉审稿 · 汇总成品</small>
   </div>
@@ -709,8 +745,10 @@ dialog[open]::backdrop{animation:fadeIn .38s var(--ease)}
         <div id="keyRows"></div>
       </section>
       <section id="browserOpts" hidden>
-        <h3>模型</h3>
+        <h3>模型阵容<span class="set-hint">同一家可以加多个；点「获取列表」从 API 拉取能用的型号</span></h3>
         <div id="modelRows"></div>
+        <button class="add-model" id="addModel" type="button">＋ 添加模型</button>
+        <div id="modelLists"></div>
         <div class="set-grid">
           <label>指挥官（负责拆解和汇总）<select id="cmdSel"></select></label>
           <label>单个任务的预算上限（元，0 = 不限）<input id="budgetIn" type="number" min="0" step="0.5"></label>
@@ -732,7 +770,7 @@ dialog[open]::backdrop{animation:fadeIn .38s var(--ease)}
 
 <script>
 "use strict";
-const APP_VERSION = "Beta V1.1.0 Explorer";                          // 版本号：只改这一处，顶栏和设置面板都从这里读
+const APP_VERSION = "Beta V1.2.0 Explorer";                          // 版本号：只改这一处，顶栏和设置面板都从这里读
 /* ───────── 小工具 ───────── */
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -748,7 +786,8 @@ const store = {
 };
 // 各模型的代表色：传统色、低饱和（靛青、深靛、黛紫、松绿、赭石、陶土）
 const PALETTE = { claude: "#b0664c", deepseek: "#3f6286", "deepseek-pro": "#28405c", kimi: "#6e5f8e", glm: "#4f7a62", step: "#a4683c", 用户: "#24211c", 系统: "#8a8273" };
-const colorOf = n => PALETTE[n] || `hsl(${[...String(n)].reduce((h, c) => (h * 31 + c.codePointAt(0)) % 360, 7)} 55% 50%)`;
+// 不在上表里的模型（用户自己加的）：按名字算一个色相，饱和度、亮度压低，保持传统色的沉稳感
+const colorOf = n => PALETTE[n] || `hsl(${[...String(n)].reduce((h, c) => (h * 31 + c.codePointAt(0)) % 360, 7)} 30% 42%)`;
 const initial = n => ([...String(n)][0] || "?").toUpperCase();
 const EXAMPLES = [
   "帮我写一份 Python 爬虫入门教程，包含示例代码和注意事项",
@@ -1490,36 +1529,82 @@ async function stop() {
 /* ═════════ 浏览器版：直接双击打开 HTML 时使用，不需要 server.py ═════════
    调度逻辑是 orchestrator.py 的 JavaScript 移植版，发出的事件和后端完全一样，所以界面代码两边共用。 */
 
-// 各家 Key。智谱 GLM 的接口不返回跨域许可头（2026-11 实测），浏览器直接调用会被拦截
+// 服务商：都是 OpenAI 兼容格式。2026-11 实测：下面除智谱 GLM 外，都允许浏览器直接列出模型和调用
+// （没收录：火山方舟——不能自动列出模型；腾讯混元——不允许浏览器直接调用）
+const PROVIDERS = {
+  deepseek:    { label: "DeepSeek", env: "DEEPSEEK_API_KEY", base: "https://api.deepseek.com/v1", site: "https://platform.deepseek.com" },
+  step:        { label: "阶跃星辰 Step", env: "STEP_API_KEY", base: "https://api.stepfun.com/v1", site: "https://platform.stepfun.com" },
+  kimi:        { label: "Kimi（月之暗面）", env: "KIMI_API_KEY", base: "https://api.moonshot.cn/v1", site: "https://platform.kimi.com" },
+  dashscope:   { label: "阿里百炼（通义千问）", env: "DASHSCOPE_API_KEY", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", site: "https://bailian.console.aliyun.com" },
+  siliconflow: { label: "硅基流动", env: "SILICONFLOW_API_KEY", base: "https://api.siliconflow.cn/v1", site: "https://cloud.siliconflow.cn" },
+  qianfan:     { label: "百度千帆（文心）", env: "QIANFAN_API_KEY", base: "https://qianfan.baidubce.com/v2", site: "https://console.bce.baidu.com/qianfan" },
+  minimax:     { label: "MiniMax", env: "MINIMAX_API_KEY", base: "https://api.minimaxi.com/v1", site: "https://platform.minimaxi.com" },
+  glm:         { label: "智谱 GLM", env: "GLM_API_KEY", base: "https://open.bigmodel.cn/api/paas/v4", site: "https://open.bigmodel.cn", blocked: true },
+};
 const KEY_INFO = {
-  DEEPSEEK_API_KEY: { label: "DeepSeek", site: "https://platform.deepseek.com" },
-  STEP_API_KEY: { label: "阶跃星辰 Step", site: "https://platform.stepfun.com" },
-  KIMI_API_KEY: { label: "Kimi（月之暗面）", site: "https://platform.kimi.com" },
-  GLM_API_KEY: { label: "智谱 GLM", site: "https://open.bigmodel.cn", blocked: true },
-  CLAUDE_API_KEY: { label: "Claude", site: "https://console.anthropic.com" },
+  ...Object.fromEntries(Object.values(PROVIDERS).map(p => [p.env, { label: p.label, site: p.site, blocked: p.blocked }])),
+  CLAUDE_API_KEY: { label: "Claude", site: "https://console.anthropic.com" },             // 只有本地版用得到
 };
-// 型号、价格（元 / 百万 tokens）、请求参数：2026-11 对照各家官方文档查证，和 models.toml 一致
-const BROWSER_MODELS = {
-  "deepseek-pro": { key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com/v1", model: "deepseek-v4-pro",
-    skills: "复杂推理、规划拆解、综合把关", price: { in: 9, cached: 0.3, out: 27 },
-    extra: { max_tokens: 16000, thinking: { type: "disabled" } } },
-  deepseek: { key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com/v1", model: "deepseek-flash",
-    skills: "写代码、数学与逻辑推理、性价比高，适合大部分具体执行任务", price: { in: 2, cached: 0.04, out: 8 },
-    extra: { max_tokens: 16000, thinking: { type: "disabled" } } },
-  step: { key_env: "STEP_API_KEY", base_url: "https://api.stepfun.com/v1", model: "step-3.7-flash",
-    skills: "通用问答、信息整理", price: { in: 1.35, cached: 0.27, out: 8.1 },
-    extra: { reasoning_effort: "low", max_tokens: 16000 } },
-  kimi: { key_env: "KIMI_API_KEY", base_url: "https://api.moonshot.cn/v1", model: "kimi-k3.1-pro",
-    skills: "超长上下文，读长文档、整理资料、总结论文", price: { in: 13, cached: 1.3, out: 68 },
-    omit: ["temperature", "max_tokens"], extra: { reasoning_effort: "low", max_completion_tokens: 16000 } },
-  glm: { key_env: "GLM_API_KEY", base_url: "https://open.bigmodel.cn/api/paas/v4", model: "glm-5.3",
-    skills: "中文写作、润色，适合当审稿人做交叉检查", price: { in: 8, cached: 2, out: 28 },
-    extra: { reasoning_effort: "low", max_tokens: 16000 }, blocked: true },
+// 查证过官方价格的型号（元 / 百万 tokens，2026-11）。其它型号的花费显示「未配价格」，可以在设置里手填
+const KNOWN_PRICES = {
+  "deepseek-flash": { in: 2, cached: 0.04, out: 8 }, "deepseek-v4-pro": { in: 9, cached: 0.3, out: 27 },   // DeepSeek 按高峰价
+  "step-3.7-flash": { in: 1.35, cached: 0.27, out: 8.1 }, "step-3.5-flash": { in: 0.7, cached: 0.14, out: 2.1 },
+  "step-5-preview": { in: 7, cached: 0.7, out: 20 },
+  "kimi-k3.1-pro": { in: 13, cached: 1.3, out: 68 }, "kimi-k3": { in: 20, cached: 2, out: 100 },
+  "kimi-k2.7-code": { in: 6.5, cached: 1.3, out: 27 }, "kimi-k2.6": { in: 6.5, cached: 1.1, out: 27 },
+  "glm-5.3": { in: 8, cached: 2, out: 28 }, "glm-5.3-flash": { in: 0.8, cached: 0.23, out: 2.8 },
 };
-const BROWSER_DEFAULTS = { commander: "deepseek-pro", reviewers: ["deepseek", "step", "kimi"], max_workers: 3, max_retries: 1, budget: 2 };
+// 拉取到的列表里去掉不能聊天的模型：向量、重排、语音、图片、视频……
+const NON_CHAT = /embed|rerank|bge-|tts|asr|whisper|speech|audio|realtime|transcri|cosyvoice|sensevoice|paraformer|image|flux|diffusion|sdxl|kolors|video|wanx?\d|t2i|t2v|i2v|i2i|text-to|moderation|dall-e/i;
+// 不同模型对请求参数的要求不一样：已知的特殊情况在这里处理，其余用通用参数（都可以在设置里改）
+function presetParams(provider, model) {
+  model = String(model || "");
+  if (provider === "deepseek") return { extra: { max_tokens: 16000, thinking: { type: "disabled" } } };      // 关掉思考：快、省钱
+  if (provider === "kimi" && /^kimi-k3/.test(model))                                                          // K3 不让传 temperature
+    return { omit: ["temperature", "max_tokens"], extra: { reasoning_effort: "low", max_completion_tokens: 16000 } };
+  if (provider === "step" && /^step-[35]/.test(model)) return { extra: { reasoning_effort: "low", max_tokens: 16000 } };
+  if (provider === "dashscope" && /^qw/i.test(model)) return { extra: { max_tokens: 8192, enable_thinking: false } };  // 通义千问：非流式要关思考
+  if (provider === "siliconflow" && /qwen3/i.test(model)) return { extra: { max_tokens: 8192, enable_thinking: false } };
+  if (provider === "glm") return { extra: { reasoning_effort: "low", max_tokens: 16000 } };
+  return { extra: { max_tokens: 8192 } };
+}
+const DEFAULT_ROSTER = [
+  { name: "deepseek-pro", provider: "deepseek", model: "deepseek-v4-pro", skills: "复杂推理、规划拆解、综合把关" },
+  { name: "deepseek", provider: "deepseek", model: "deepseek-flash", skills: "写代码、数学与逻辑推理、性价比高，适合大部分具体执行任务" },
+  { name: "step", provider: "step", model: "step-3.7-flash", skills: "通用问答、信息整理" },
+  { name: "kimi", provider: "kimi", model: "kimi-k3.1-pro", skills: "超长上下文，读长文档、整理资料、总结论文" },
+];
+const PROVIDER_SKILLS = {                                                // 新加模型时预填的「擅长」，用户可改
+  deepseek: "写代码、数学与逻辑推理", step: "通用问答、信息整理", kimi: "超长上下文，读长文档、整理资料",
+  dashscope: "中文理解与写作、通用任务", siliconflow: "开源模型，性价比高", qianfan: "中文写作、知识问答",
+  minimax: "长文本处理、对话与写作", glm: "中文写作、润色",
+};
+const BROWSER_DEFAULTS = { commander: "deepseek-pro", max_workers: 3, max_retries: 1, budget: 2 };
+const NAME_RE = /^[\w.\-一-龥]{1,24}$/;                          // 模型名称：字母数字、. _ -、中文
 
-function loadBrowserSettings() { try { return JSON.parse(store.get("mlc.settings", "{}")) || {}; } catch { return {}; } }
+// 设置 V2：{roster: [{name, provider, model, skills, enabled, price, params}], commander, budget, remember}
+function loadBrowserSettings() {
+  let st;
+  try { st = JSON.parse(store.get("mlc.settings", "{}")) || {}; } catch { st = {}; }
+  if (!Array.isArray(st.roster)) {
+    // 迁移 V1.0 / V1.1 的旧设置 {models: {名称: {enabled, model}}}：沿用用户改过的型号和开关
+    const old = st.models || {};
+    st.roster = DEFAULT_ROSTER.map(r => ({ ...r, enabled: (old[r.name] || {}).enabled ?? true, model: (old[r.name] || {}).model || r.model }));
+    delete st.models;
+  }
+  return st;
+}
 function saveBrowserSettings(s) { store.set("mlc.settings", JSON.stringify(s)); }
+const entryPrice = r => r.price || KNOWN_PRICES[r.model] || null;
+function entryParams(r) {
+  if (r.params) { try { return JSON.parse(r.params); } catch { /* 保存时已校验，这里兜底 */ } }
+  return presetParams(r.provider, r.model);
+}
+// 每家服务商拉取到的模型列表：记在浏览器里，下次打开设置还能直接选
+function modelListOf(p) {
+  if (S.modelLists?.[p]) return S.modelLists[p];
+  try { return JSON.parse(store.get("mlc.ml." + p, "[]")) || []; } catch { return []; }
+}
 // Key：勾选「记住」存 localStorage（下次打开还在），否则存 sessionStorage（关掉页面就没了）
 const keyStore = {
   mem: null,                                                           // 存储不可用时的兜底（只在当前页面有效）
@@ -1540,21 +1625,41 @@ const keyStore = {
 // 拼出和后端 /api/config 同样形状的配置，花名册、设置面板都能直接用
 function browserCfg() {
   const st = loadBrowserSettings(), keys = keyStore.get();
-  const commander = BROWSER_MODELS[st.commander] && !BROWSER_MODELS[st.commander].blocked ? st.commander : BROWSER_DEFAULTS.commander;
-  const models = Object.entries(BROWSER_MODELS).map(([name, d]) => {
-    const o = (st.models || {})[name] || {};
-    const userEnabled = o.enabled ?? true;
-    return { name, model: o.model || d.model, skills: d.skills, key_env: d.key_env, has_key: !!keys[d.key_env],
-      model_ready: true, commander: name === commander, enabled: userEnabled && !d.blocked, userEnabled,
-      blocked: !!d.blocked, price: d.price };
+  const usable = r => !(PROVIDERS[r.provider] || {}).blocked && r.enabled !== false && !!r.model;
+  const commander = st.roster.some(r => r.name === st.commander && usable(r)) ? st.commander
+    : (st.roster.find(r => r.name === BROWSER_DEFAULTS.commander && usable(r)) || st.roster.find(usable) || {}).name || "";
+  const models = st.roster.map(r => {
+    const p = PROVIDERS[r.provider] || {}, pp = entryParams(r);
+    return { name: r.name, provider: r.provider, model: r.model || "", skills: r.skills || "", key_env: p.env,
+      has_key: !!keys[p.env], model_ready: !!r.model, commander: r.name === commander, enabled: usable(r),
+      userEnabled: r.enabled !== false, blocked: !!p.blocked, price: entryPrice(r),
+      base_url: p.base, omit: pp.omit || [], extra: pp.extra || {} };
   });
-  const envs = [...new Set(Object.values(BROWSER_MODELS).map(d => d.key_env))];
   return {
-    browser: true, commander, models, reviewers: BROWSER_DEFAULTS.reviewers, max_workers: BROWSER_DEFAULTS.max_workers,
-    max_retries: BROWSER_DEFAULTS.max_retries, budget: st.budget ?? BROWSER_DEFAULTS.budget, remember: !!st.remember,
-    keys: envs.map(env => ({ env, models: models.filter(m => m.key_env === env).map(m => m.name), set: !!keys[env],
-      tail: (keys[env] || "").length > 8 ? keys[env].slice(-4) : "" })),
+    browser: true, commander, models, roster: st.roster,
+    reviewers: models.filter(m => m.name !== commander).map(m => m.name),           // 按阵容顺序找审稿人
+    max_workers: BROWSER_DEFAULTS.max_workers, max_retries: BROWSER_DEFAULTS.max_retries,
+    budget: st.budget ?? BROWSER_DEFAULTS.budget, remember: !!st.remember,
+    keys: Object.values(PROVIDERS).map(p => ({ env: p.env, models: models.filter(m => m.key_env === p.env).map(m => m.name),
+      set: !!keys[p.env], tail: (keys[p.env] || "").length > 8 ? keys[p.env].slice(-4) : "" })),
   };
+}
+// 从服务商的 API 拉取可用模型（GET /models），只留能聊天的
+async function fetchModels(provider, key) {
+  const p = PROVIDERS[provider];
+  let r;
+  try { r = await fetch(p.base.replace(/\/$/, "") + "/models", { headers: { Authorization: `Bearer ${key}` } }); }
+  catch (e) { throw new Error(`请求没有发出去：网络不通，或这家不允许浏览器直接访问（${e.message}）`); }
+  if (!r.ok) {
+    const hint = r.status === 401 || r.status === 403 ? "：Key 无效或没有权限" : r.status === 404 ? "：这家不支持自动列出模型，请手动填写型号" : "";
+    throw new Error(`HTTP ${r.status}${hint}`);
+  }
+  const j = await r.json().catch(() => ({}));
+  const ids = [...new Set((j.data || j.models || []).map(x => typeof x === "string" ? x : x.id || x.name || x.model).filter(Boolean))];
+  const chat = ids.filter(id => !NON_CHAT.test(id)).sort((a, b) => a.localeCompare(b));
+  (S.modelLists ||= {})[provider] = chat;
+  store.set("mlc.ml." + provider, JSON.stringify(chat));
+  return { total: ids.length, chat };
 }
 
 class Cancel extends Error {}
@@ -1596,13 +1701,18 @@ async function callModel(m, key, system, user, temperature, maxTokens, ctl, retr
 }
 
 function mockReply(name, system, user) {
-  if (system.includes("拆解")) return `好的，计划如下：
+  if (system.includes("拆解")) {
+    // 按阵容里实际可用的模型轮流分派，这样用户自己加的模型在模拟模式里也能看到
+    const names = [...user.matchAll(/^- (.+?)：/gm)].map(x => x[1]);
+    const w = i => JSON.stringify(names.length ? names[i % names.length] : "deepseek");
+    return `好的，计划如下：
 {"subtasks": [
-  {"id": 1, "worker": "kimi", "title": "收集资料", "instruction": "整理与任务相关的背景资料要点", "depends_on": []},
-  {"id": 2, "worker": "deepseek", "title": "写示例代码", "instruction": "独立写一段示例代码，演示核心用法", "depends_on": []},
-  {"id": 3, "worker": "step", "title": "整理常见问题", "instruction": "列出新手最常遇到的问题和解决办法", "depends_on": []},
-  {"id": 4, "worker": "glm", "title": "写说明文字", "instruction": "把资料、代码和常见问题写成通顺的中文说明", "depends_on": [1, 2, 3]}
+  {"id": 1, "worker": ${w(0)}, "title": "收集资料", "instruction": "整理与任务相关的背景资料要点", "depends_on": []},
+  {"id": 2, "worker": ${w(1)}, "title": "写示例代码", "instruction": "独立写一段示例代码，演示核心用法", "depends_on": []},
+  {"id": 3, "worker": ${w(2)}, "title": "整理常见问题", "instruction": "列出新手最常遇到的问题和解决办法", "depends_on": []},
+  {"id": 4, "worker": ${w(3)}, "title": "写说明文字", "instruction": "把资料、代码和常见问题写成通顺的中文说明", "depends_on": [1, 2, 3]}
 ]}`;
+  }
   if (system.includes("审稿")) {
     if (user.includes("写一段示例代码") && !user.includes("已按意见修改"))
       return '{"pass": false, "feedback": "（模拟）示例代码缺少异常处理和请求间隔，请补上"}';
@@ -1624,7 +1734,7 @@ function extractJSON(text) {
 // 整个任务：拆解 → 并发执行 + 交叉审稿 → 骨架汇总。emit 收到的事件和后端推送的一模一样
 async function runBrowser(task, mock, emit, ctl) {
   const cfg = S.cfg, keys = keyStore.get(), calls = [], t0 = performance.now();
-  const M = Object.fromEntries(cfg.models.map(m => [m.name, { ...BROWSER_MODELS[m.name], ...m }]));
+  const M = Object.fromEntries(cfg.models.map(m => [m.name, m]));        // 阵容里每个模型：接口地址、型号、参数、价格
   const usable = n => M[n] && M[n].enabled && (mock || M[n].has_key);
   const commander = cfg.commander;
   if (!usable(commander)) throw new Error(`指挥官「${commander}」不可用：请在「API 设置」里填好它的 Key 并启用`);
@@ -1665,7 +1775,12 @@ async function runBrowser(task, mock, emit, ctl) {
     const s = byId[d], kind = st.depends_on.includes(d) ? "直接依赖" : "间接依赖";
     return `【子任务 #${d}「${s.title}」（${s.worker}，${kind}）的结果】\n${done[d]}`;
   }).join("\n\n");
-  const pickReviewer = w => cfg.reviewers.find(r => r !== w && r in workers) || commander;
+  // 审稿人：优先换一家服务商（同一家可能有多个模型），实在没有再找同家的其它模型，最后才让指挥官审
+  const pickReviewer = w => {
+    const wp = (M[w] || {}).provider;
+    return cfg.reviewers.find(r => r !== w && r in workers && M[r].provider !== wp)
+      || cfg.reviewers.find(r => r !== w && r in workers) || commander;
+  };
 
   async function runOne(st, done, feedback) {
     let user = `${st.instruction}\n\n（总任务：${task}）`;
@@ -1787,7 +1902,7 @@ function openSettings() {
   const note = $("#setNote");
   note.className = "set-note" + (browser ? " warn" : "");
   note.innerHTML = browser
-    ? "浏览器版：Key 只保存在你自己的浏览器里，请求由浏览器直接发给各家 API，不经过任何中转服务器。有哪几家的 Key 就填哪几家，没填的模型自动不参与。<br>注意：智谱 GLM 的接口不允许浏览器直接调用，浏览器版用不了 GLM；需要 GLM 请用本地版（<code>python server.py</code>）。"
+    ? "浏览器版：Key 只保存在你自己的浏览器里，请求由浏览器直接发给各家 API，不经过任何中转服务器。<br>用法：① 填上你有的 Key → ② 在「模型阵容」里点「获取列表」挑型号，同一家可以加多个 → ③ 点「测试连接」。没填 Key 的模型自动不参与。<br>智谱 GLM 的接口不允许浏览器直接调用，浏览器版用不了；需要 GLM 请用本地版（<code>python server.py</code>）。"
     : "本地版：Key 保存到本机的 <code>.env</code> 文件，只在本机后端使用，网页上只显示末尾 4 位。型号和价格在 <code>models.toml</code> 里改。";
   renderKeyRows();
   $("#browserOpts").hidden = !browser;
@@ -1814,16 +1929,115 @@ function renderKeyRows() {
       ${st}</div>`;
   }).join("");
 }
+/* ── 浏览器版：模型阵容编辑器（每行一个模型，同一家可以有多个）── */
+const provOptions = sel => Object.entries(PROVIDERS).map(([k, p]) =>
+  `<option value="${k}" ${k === sel ? "selected" : ""} ${p.blocked ? "disabled" : ""}>${esc(p.label)}${p.blocked ? "（浏览器版不可用）" : ""}</option>`).join("");
+function rosterRow(r) {
+  const pr = r.price || {}, known = KNOWN_PRICES[r.model] || {};
+  const pin = (k, label) => `<label>${label}<input type="number" min="0" step="0.01" data-p="${k}" value="${pr[k] ?? ""}" placeholder="${known[k] ?? ""}"></label>`;
+  return `<div class="rrow">
+    <div class="rrow-a">
+      <label class="r-en" title="启用 / 停用"><input type="checkbox" ${r.enabled !== false ? "checked" : ""} aria-label="启用"></label>
+      <input class="r-name" value="${esc(r.name)}" placeholder="名称" maxlength="24" aria-label="名称" spellcheck="false">
+      <select class="r-prov" aria-label="服务商">${provOptions(r.provider)}</select>
+      <div class="r-model">
+        <input class="r-mod" value="${esc(r.model || "")}" list="ml-${esc(r.provider)}" placeholder="型号：点「获取列表」或直接输入" aria-label="型号" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn-sm" data-act="fetch">获取列表</button>
+      </div>
+      <button type="button" class="r-del" data-act="del" title="从阵容里删除" aria-label="删除">✕</button>
+    </div>
+    <input class="r-skill" value="${esc(r.skills || "")}" placeholder="擅长什么（写给指挥官看，它按这个分配任务）" aria-label="擅长">
+    <details class="r-adv"><summary>价格与参数</summary>
+      <div class="r-price">${pin("in", "输入")}${pin("cached", "缓存命中")}${pin("out", "输出")}
+        <span>元 / 百万 tokens · 留空${KNOWN_PRICES[r.model] ? "用内置的官方价" : "则只统计 tokens、不算钱"}</span></div>
+      <label class="r-params">请求参数（JSON，留空 = 自动；某个模型报参数错误时再改）
+        <textarea rows="2" spellcheck="false" placeholder="${esc(JSON.stringify(presetParams(r.provider, r.model)))}">${esc(r.params || "")}</textarea></label>
+    </details>
+    <div class="r-msg"></div>
+  </div>`;
+}
+function renderDatalists() {
+  $("#modelLists").innerHTML = Object.keys(PROVIDERS).map(p =>
+    `<datalist id="ml-${p}">${modelListOf(p).map(id => `<option value="${esc(id)}"></option>`).join("")}</datalist>`).join("");
+}
+function refreshCmdSel(keep) {
+  const sel = $("#cmdSel"), cur = keep ?? sel.value;
+  const names = $$("#modelRows .rrow").filter(row => !PROVIDERS[$(".r-prov", row).value]?.blocked)
+    .map(row => [$(".r-name", row).value.trim(), $(".r-mod", row).value.trim()]).filter(([n]) => n);
+  sel.innerHTML = names.map(([n, m]) => `<option value="${esc(n)}" ${n === cur ? "selected" : ""}>${esc(n)}${m ? `（${esc(m)}）` : ""}</option>`).join("");
+}
 function renderBrowserOpts() {
-  $("#modelRows").innerHTML = S.cfg.models.map(m => `<div class="mrow" data-name="${esc(m.name)}">
-      <input type="checkbox" ${m.userEnabled && !m.blocked ? "checked" : ""} ${m.blocked ? "disabled" : ""} aria-label="启用 ${esc(m.name)}">
-      <b>${esc(m.name)}</b>
-      <input type="text" value="${esc(m.model)}" ${m.blocked ? "disabled" : ""} aria-label="${esc(m.name)} 的型号名">
-      ${m.blocked ? `<span class="why">接口不允许浏览器直接调用，浏览器版用不了</span>` : ""}</div>`).join("");
-  $("#cmdSel").innerHTML = S.cfg.models.filter(m => !m.blocked).map(m =>
-    `<option value="${esc(m.name)}" ${m.commander ? "selected" : ""}>${esc(m.name)}（${esc(m.model)}）</option>`).join("");
+  const st = loadBrowserSettings();
+  $("#modelRows").innerHTML = st.roster.map(rosterRow).join("");
+  renderDatalists();
+  refreshCmdSel(S.cfg.commander);
   $("#budgetIn").value = S.cfg.budget;
   $("#rememberKeys").checked = !!S.cfg.remember;
+}
+function addModelRow() {
+  // 默认选一家「填了 Key 但阵容里还没有」的服务商，方便刚填完 Key 就加模型
+  const keys = keyStore.get(), typed = env => !!$(`#keyRows .krow[data-env="${env}"] input`)?.value.trim();
+  const inRoster = new Set($$("#modelRows .r-prov").map(s => s.value));
+  const prov = Object.keys(PROVIDERS).find(p => !PROVIDERS[p].blocked && (keys[PROVIDERS[p].env] || typed(PROVIDERS[p].env)) && !inRoster.has(p))
+    || Object.keys(PROVIDERS).find(p => !PROVIDERS[p].blocked && !inRoster.has(p)) || "deepseek";
+  const used = new Set($$("#modelRows .r-name").map(i => i.value.trim()));
+  let name = prov, k = 2;
+  while (used.has(name)) name = `${prov}-${k++}`;
+  $("#modelRows").insertAdjacentHTML("beforeend", rosterRow({ name, provider: prov, model: "", skills: PROVIDER_SKILLS[prov] || "", enabled: true }));
+  const row = $("#modelRows .rrow:last-child");
+  row.classList.add("new"); refreshCmdSel();
+  $(".r-mod", row).focus();
+  setRowMsg(row, `已添加：先在上面填好 ${PROVIDERS[prov].label} 的 Key，再点「获取列表」挑选型号`, "");
+}
+function setRowMsg(row, text, kind) { const el = $(".r-msg", row); el.textContent = text || ""; el.className = "r-msg" + (kind ? " " + kind : ""); }
+async function fetchForRow(row) {
+  const prov = $(".r-prov", row).value, env = PROVIDERS[prov].env;
+  const key = $(`#keyRows .krow[data-env="${env}"] input`)?.value.trim() || keyStore.get()[env];  // 刚填还没保存的 Key 也能用
+  if (!key) { setRowMsg(row, `还没有 ${PROVIDERS[prov].label} 的 Key：先在上面「API Key」里填写`, "bad"); return; }
+  const btn = $('[data-act="fetch"]', row);
+  btn.disabled = true; btn.textContent = "获取中…";
+  try {
+    const { total, chat } = await fetchModels(prov, key);
+    renderDatalists();
+    const input = $(".r-mod", row);
+    setRowMsg(row, chat.length ? `找到 ${chat.length} 个可以聊天的模型${total > chat.length ? `（另有 ${total - chat.length} 个向量、语音、图片等模型已隐藏）` : ""}：点型号框或输入关键字挑选`
+      : `接口没有返回可以聊天的模型（共 ${total} 个）：请手动填写型号`, chat.length ? "ok" : "bad");
+    input.focus();
+    if (input.showPicker) { try { input.showPicker(); } catch { /* 部分浏览器不支持直接弹出候选 */ } }
+  } catch (e) { setRowMsg(row, "获取失败：" + e.message, "bad"); }
+  finally { btn.disabled = false; btn.textContent = "获取列表"; }
+}
+// 读出编辑器里的阵容并校验；有问题返回 {error}，并把出错的那一行标出来
+function collectRoster() {
+  const roster = [], names = new Set();
+  for (const row of $$("#modelRows .rrow")) {
+    const fail = msg => { setRowMsg(row, msg, "bad"); row.scrollIntoView({ block: "nearest" }); return { error: msg }; };
+    const name = $(".r-name", row).value.trim(), provider = $(".r-prov", row).value, model = $(".r-mod", row).value.trim();
+    const enabled = $(".r-en input", row).checked;
+    if (!NAME_RE.test(name)) return fail("名称只能用字母、数字、中文和 . _ -，最多 24 个字");
+    if (names.has(name)) return fail(`名称「${name}」重复了：每个模型的名称要不一样`);
+    names.add(name);
+    if (enabled && !model) return fail(`「${name}」还没选型号：点「获取列表」挑一个，或者先取消勾选停用它`);
+    const pv = Object.fromEntries($$("[data-p]", row).map(i => [i.dataset.p, i.value.trim()]));
+    let price = null;
+    if (pv.in || pv.cached || pv.out) {
+      const n = k => Number(pv[k]);
+      if ([pv.in, pv.out].some(v => v === "" || !isFinite(Number(v)) || Number(v) < 0)) return fail("价格要填输入和输出两项，都是不小于 0 的数字");
+      price = { in: n("in"), cached: pv.cached === "" ? n("in") : n("cached"), out: n("out") };
+    }
+    const params = $(".r-params textarea", row).value.trim();
+    if (params) {
+      let p;
+      try { p = JSON.parse(params); } catch { return fail("请求参数不是合法的 JSON"); }
+      if (!p || typeof p !== "object" || Array.isArray(p) || (p.omit && !Array.isArray(p.omit)) || (p.extra && typeof p.extra !== "object"))
+        return fail('请求参数的格式是 {"omit": [不发送的参数名], "extra": {额外参数}}');
+    }
+    roster.push({ name, provider, model, skills: $(".r-skill", row).value.trim(), enabled, price, params: params || null });
+    setRowMsg(row, "", "");
+  }
+  if (!roster.length) return { error: "阵容里至少要有一个模型" };
+  if (roster.filter(r => r.enabled && !PROVIDERS[r.provider].blocked).length < 2) return { error: "至少要启用两个模型：一个当指挥官，一个干活" };
+  return { roster };
 }
 async function saveSettings() {
   const values = {};
@@ -1847,13 +2061,12 @@ async function saveSettings() {
     }
     await loadConfig();
   } else {
-    const st = loadBrowserSettings();
-    st.models = {};
-    $$("#modelRows .mrow").forEach(row => {
-      const name = row.dataset.name;
-      st.models[name] = { enabled: $("input[type=checkbox]", row).checked, model: $("input[type=text]", row).value.trim() || BROWSER_MODELS[name].model };
-    });
+    const st = loadBrowserSettings(), got = collectRoster();
+    if (got.error) { setMsg(got.error, "bad"); return false; }
+    st.roster = got.roster;
     st.commander = $("#cmdSel").value;
+    const cmd = st.roster.find(r => r.name === st.commander);
+    if (!cmd || !cmd.enabled) { setMsg(`指挥官「${st.commander || "（未选）"}」没启用：请换一个，或者把它勾选上`, "bad"); return false; }
     const b = parseFloat($("#budgetIn").value);
     st.budget = isFinite(b) && b >= 0 ? b : BROWSER_DEFAULTS.budget;
     st.remember = $("#rememberKeys").checked;
@@ -1873,7 +2086,7 @@ async function browserTest() {
   const list = S.cfg.models.filter(m => m.enabled);
   await Promise.all(list.map(async m => {
     if (!keys[m.key_env]) { out.push({ name: m.name, model: m.model, ok: false, detail: "没有 Key：在上面填写（没填的模型跑任务时自动不参与）" }); return; }
-    const d = { ...BROWSER_MODELS[m.name], model: m.model }, t = performance.now();
+    const d = { ...m }, t = performance.now();
     const lim = (d.omit || []).includes("max_tokens") ? { max_completion_tokens: 16 } : { max_tokens: 16 };   // 测试只要最短的回答
     try {
       await callModel({ ...d, extra: { ...(d.extra || {}), ...lim } }, keys[m.key_env], "只回复一个字：好", "你好", 0.3, 16,
@@ -1911,7 +2124,7 @@ function applyBackendUI() {
   badge.title = browser ? "直接在浏览器里运行，不需要 server.py；Key 只存在你的浏览器里。智谱 GLM 在浏览器版用不了" : "由本机的 server.py 运行，Key 保存在 .env";
   $("#historyBtn").hidden = browser;                                    // 浏览器版不落盘，没有历史记录
   $("#rosterFoot").innerHTML = browser
-    ? "点右上角钥匙图标「API 设置」填 Key、选型号；有哪家的 Key 就填哪家，没填的自动不参与。"
+    ? "点右上角钥匙图标「API 设置」：填 Key，再从各家的模型列表里挑型号加进阵容；没填 Key 的自动不参与。"
     : "点右上角钥匙图标「API 设置」填 Key；型号和价格在 <code>models.toml</code> 里改，改完点「刷新」即可，不用重启。";
   $("#reloadCfg").title = browser ? "重新读取浏览器里保存的设置" : "重新读取 models.toml 和 .env";
 }
@@ -1965,12 +2178,36 @@ $("#saveKeys").addEventListener("click", () => saveSettings());
 $("#testBtn").addEventListener("click", testConnections);
 $("#settings").addEventListener("click", e => {
   if (e.target.closest("[data-close]") || e.target === e.currentTarget) { e.currentTarget.close(); return; }
-  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const b = e.target.closest("#keyRows button[data-act]"); if (!b) return;   // 只管 API Key 那几行；模型阵容的按钮另有处理
   const row = b.closest(".krow"), input = $("input", row);
   if (b.dataset.act === "show") { input.type = input.type === "password" ? "text" : "password"; b.textContent = input.type === "password" ? "显示" : "隐藏"; }
   if (b.dataset.act === "clear") { pendingClear.add(row.dataset.env); input.value = ""; renderKeyRows(); setMsg("点「保存」后清除", ""); }
 });
 $("#settings").addEventListener("close", () => $$("#keyRows input").forEach(i => (i.value = "")));   // 关掉面板时清空输入框里的明文
+// 模型阵容编辑器
+$("#addModel").addEventListener("click", addModelRow);
+$("#modelRows").addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const row = b.closest(".rrow");
+  if (b.dataset.act === "fetch") fetchForRow(row);
+  if (b.dataset.act === "del") { row.remove(); refreshCmdSel(); setMsg("点「保存」后生效", ""); }
+});
+$("#modelRows").addEventListener("change", e => {
+  const row = e.target.closest(".rrow"); if (!row) return;
+  if (e.target.matches(".r-prov")) {                                     // 换了服务商：候选列表、默认参数跟着换
+    const p = e.target.value;
+    $(".r-mod", row).setAttribute("list", "ml-" + p);
+    $(".r-params textarea", row).placeholder = JSON.stringify(presetParams(p, $(".r-mod", row).value));
+    setRowMsg(row, modelListOf(p).length ? "" : `点「获取列表」拉取 ${PROVIDERS[p].label} 的模型`, "");
+  }
+  if (e.target.matches(".r-mod")) {                                      // 选了型号：默认参数、内置价格提示跟着换
+    const m = e.target.value.trim(), known = KNOWN_PRICES[m] || {};
+    $(".r-params textarea", row).placeholder = JSON.stringify(presetParams($(".r-prov", row).value, m));
+    $$("[data-p]", row).forEach(i => (i.placeholder = known[i.dataset.p] ?? ""));
+    refreshCmdSel();
+  }
+});
+$("#modelRows").addEventListener("input", e => { if (e.target.matches(".r-name")) refreshCmdSel(); });
 $("#history").addEventListener("click", e => {
   if (e.target.closest("[data-close]") || e.target === e.currentTarget) e.currentTarget.close();
   const b = e.target.closest("#runList button"); if (b) viewRun(b);
