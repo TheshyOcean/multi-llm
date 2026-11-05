@@ -1,0 +1,15 @@
+{
+  "name": "多模型协作台",
+  "short_name": "协作台",
+  "description": "指挥官拆解任务、多家大模型按特长分工、交叉审稿、汇总成品",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#4f46e5",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
